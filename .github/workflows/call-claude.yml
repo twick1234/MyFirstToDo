@@ -11,12 +11,19 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Validate API Key
+      run: |
+        if [ -z "$CLAUDE_API_KEY" ]; then
+          echo "Error: API key is not set. Please configure CLAUDE_API_KEY in repository secrets."
+          exit 1
+        fi
+
     - name: Call Claude API
       env:
         CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }} # Store API key securely in GitHub Secrets
       run: |
         echo "Calling Claude API..."
-        curl -X POST "https://api.claude.example.com/v1/chat" \
+        curl --verbose -X POST "https://api.claude.example.com/v1/chat" \
           -H "Authorization: Bearer $CLAUDE_API_KEY" \
           -H "Content-Type: application/json" \
           -d '{
@@ -25,4 +32,4 @@ jobs:
                   "temperature": 0.7,
                   "max_tokens": 256
                 }
-              }'
+              }' || echo "Error: API call failed"
