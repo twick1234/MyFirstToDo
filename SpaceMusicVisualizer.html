@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+this.oscillators = [];
+this.usingFakeAudio = false;<!DOCTYPE html>
 
 <html lang="en">
 <head>
@@ -28,20 +29,24 @@
         width: 100vw;
         height: 100vh;
         background: radial-gradient(circle at center, #1a1a2e 0%, #0c0c0c 100%);
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
     }
 
     .ui-overlay {
-        position: absolute;
+        position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
         pointer-events: none;
-        z-index: 10;
+        z-index: 1000;
     }
 
     .controls {
-        position: absolute;
+        position: fixed;
         bottom: 20px;
         left: 50%;
         transform: translateX(-50%);
@@ -50,6 +55,7 @@
         align-items: center;
         gap: 15px;
         pointer-events: all;
+        z-index: 100;
     }
 
     .control-row {
@@ -59,10 +65,10 @@
     }
 
     button {
-        background: rgba(100, 255, 218, 0.9);
+        background: rgba(100, 255, 218, 0.95);
         color: #0c0c0c;
         border: none;
-        padding: 12px 16px;
+        padding: 15px 20px;
         border-radius: 25px;
         cursor: pointer;
         font-weight: bold;
@@ -70,12 +76,22 @@
         transition: all 0.3s ease;
         backdrop-filter: blur(10px);
         box-shadow: 0 4px 15px rgba(100, 255, 218, 0.3);
-        min-width: 60px;
+        min-width: 80px;
+        pointer-events: auto;
+        user-select: none;
+        -webkit-user-select: none;
+        -webkit-tap-highlight-color: rgba(100, 255, 218, 0.3);
     }
 
     button:hover, button:active {
         transform: scale(1.05);
         box-shadow: 0 6px 20px rgba(100, 255, 218, 0.4);
+        background: rgba(100, 255, 218, 1);
+    }
+
+    button:focus {
+        outline: none;
+        transform: scale(1.05);
     }
 
     button.active {
@@ -85,7 +101,7 @@
     }
 
     .info-panel {
-        position: absolute;
+        position: fixed;
         top: 20px;
         left: 50%;
         transform: translateX(-50%);
@@ -94,8 +110,9 @@
         border-radius: 15px;
         padding: 15px 20px;
         text-align: center;
-        pointer-events: all;
+        pointer-events: auto;
         max-width: 90vw;
+        z-index: 1001;
     }
 
     .title {
@@ -331,47 +348,101 @@
 
         async setupAudio() {
             try {
-                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                if (!this.audioContext) {
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
                 
-                // Create oscillator for demo music
-                this.oscillator = this.audioContext.createOscillator();
-                this.gainNode = this.audioContext.createGain();
+                // Resume audio context if suspended (required for mobile)
+                if (this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume();
+                }
+                
+                // Create analyser
                 this.analyser = this.audioContext.createAnalyser();
-                
                 this.analyser.fftSize = 256;
                 this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
                 
-                // Create a more complex sound
-                this.oscillator.type = 'sine';
-                this.oscillator.frequency.setValueAtTime(220, this.audioContext.currentTime);
+                // Create master gain
+                this.masterGain = this.audioContext.createGain();
+                this.masterGain.gain.setValueAtTime(0.2, this.audioContext.currentTime);
                 
-                this.oscillator.connect(this.gainNode);
-                this.gainNode.connect(this.analyser);
+                // Connect analyser to destination
+                this.masterGain.connect(this.analyser);
                 this.analyser.connect(this.audioContext.destination);
-                
-                this.gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
-                
-                // Create varying frequencies for more interesting visualization
-                this.startFrequencyModulation();
                 
                 return true;
             } catch (error) {
                 console.error('Audio setup failed:', error);
+                this.usingFakeAudio = true;
+                return false;
+            }
+        }
+
+        createOscillators() {
+            if (!this.audioContext || this.audioContext.state === 'closed') {
+                return false;
+            }
+            
+            try {
+                // Clean up old oscillators
+                if (this.oscillators) {
+                    this.oscillators.forEach(oscData => {
+                        try {
+                            oscData.osc.stop();
+                            oscData.osc.disconnect();
+                        } catch (e) {}
+                    });
+                }
+                
+                this.oscillators = [];
+                const frequencies = [220, 330, 440]; // A3, E4, A4 chord
+                
+                frequencies.forEach((freq, i) => {
+                    const osc = this.audioContext.createOscillator();
+                    const gain = this.audioContext.createGain();
+                    
+                    osc.type = ['sine', 'triangle', 'square'][i];
+                    osc.frequency.setValueAtTime(freq, this.audioContext.currentTime);
+                    
+                    gain.gain.setValueAtTime(0.05, this.audioContext.currentTime);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.masterGain);
+                    
+                    this.oscillators.push({ osc, gain, baseFreq: freq });
+                });
+                
+                return true;
+            } catch (error) {
+                console.error('Oscillator creation failed:', error);
                 return false;
             }
         }
 
         startFrequencyModulation() {
-            if (!this.oscillator) return;
+            if (!this.oscillators || this.oscillators.length === 0 || this.usingFakeAudio) return;
             
-            const baseFreq = 220;
             const modulate = () => {
-                if (!this.isPlaying) return;
+                if (!this.isPlaying || this.usingFakeAudio) return;
                 
-                const freq = baseFreq + Math.sin(this.time * 0.01) * 100 + Math.cos(this.time * 0.007) * 50;
-                this.oscillator.frequency.setValueAtTime(freq, this.audioContext.currentTime);
-                
-                setTimeout(modulate, 50);
+                try {
+                    this.oscillators.forEach((oscData, i) => {
+                        if (oscData.osc && this.audioContext.state === 'running') {
+                            const freq = oscData.baseFreq + 
+                                       Math.sin(this.time * 0.008 + i * 2) * 50 + 
+                                       Math.cos(this.time * 0.005 + i) * 30;
+                            oscData.osc.frequency.setValueAtTime(freq, this.audioContext.currentTime);
+                            
+                            // Vary volume for rhythm
+                            const volume = 0.03 + Math.sin(this.time * 0.01 + i * 1.5) * 0.02;
+                            oscData.gain.gain.setValueAtTime(volume, this.audioContext.currentTime);
+                        }
+                    });
+                    
+                    setTimeout(modulate, 100);
+                } catch (error) {
+                    console.log('Audio modulation stopped');
+                }
             };
             modulate();
         }
@@ -389,28 +460,66 @@
         }
 
         setupEventListeners() {
-            // Touch events
-            this.canvas.addEventListener('touchstart', (e) => this.handleTouch(e), { passive: false });
-            this.canvas.addEventListener('touchmove', (e) => this.handleTouch(e), { passive: false });
-            this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+            // Canvas touch events for visual effects only
+            this.canvas.addEventListener('touchstart', (e) => {
+                if (e.target === this.canvas) {
+                    this.handleTouch(e);
+                }
+            }, { passive: true });
             
-            // Mouse events for desktop testing
+            this.canvas.addEventListener('touchmove', (e) => {
+                if (e.target === this.canvas) {
+                    this.handleTouch(e);
+                }
+            }, { passive: true });
+            
+            this.canvas.addEventListener('touchend', (e) => {
+                if (e.target === this.canvas) {
+                    this.handleTouchEnd(e);
+                }
+            }, { passive: true });
+            
+            // Mouse events for desktop
             this.canvas.addEventListener('mousedown', (e) => this.handleMouse(e));
             this.canvas.addEventListener('mousemove', (e) => this.handleMouse(e));
             
-            // Control buttons
-            document.getElementById('startBtn').addEventListener('click', () => this.toggleMusic());
-            document.getElementById('colorBtn').addEventListener('click', () => this.changeColors());
-            document.getElementById('speedBtn').addEventListener('click', () => this.changeSpeed());
+            // Button event listeners with proper delegation
+            document.addEventListener('click', (e) => {
+                if (e.target.id === 'startBtn') {
+                    e.preventDefault();
+                    this.toggleMusic();
+                } else if (e.target.id === 'colorBtn') {
+                    e.preventDefault();
+                    this.changeColors();
+                } else if (e.target.id === 'speedBtn') {
+                    e.preventDefault();
+                    this.changeSpeed();
+                } else if (e.target.classList.contains('mode-btn')) {
+                    e.preventDefault();
+                    this.changeMode(e.target.dataset.mode, e.target);
+                }
+            });
             
-            // Mode buttons
-            document.querySelectorAll('.mode-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => this.changeMode(e.target.dataset.mode, e.target));
+            // Touch events for buttons
+            document.addEventListener('touchend', (e) => {
+                if (e.target.id === 'startBtn') {
+                    e.preventDefault();
+                    this.toggleMusic();
+                } else if (e.target.id === 'colorBtn') {
+                    e.preventDefault();
+                    this.changeColors();
+                } else if (e.target.id === 'speedBtn') {
+                    e.preventDefault();
+                    this.changeSpeed();
+                } else if (e.target.classList.contains('mode-btn')) {
+                    e.preventDefault();
+                    this.changeMode(e.target.dataset.mode, e.target);
+                }
             });
         }
 
         handleTouch(e) {
-            e.preventDefault();
+            // Don't prevent default - let buttons work
             this.touches = [];
             
             for (let i = 0; i < e.touches.length; i++) {
@@ -426,7 +535,7 @@
         }
 
         handleTouchEnd(e) {
-            e.preventDefault();
+            // Don't prevent default - let buttons work
             this.touches = [];
         }
 
@@ -455,20 +564,56 @@
             const btn = document.getElementById('startBtn');
             
             if (!this.isPlaying) {
-                const success = await this.setupAudio();
-                if (success) {
-                    this.oscillator.start();
-                    this.isPlaying = true;
-                    btn.textContent = '⏸️ Pause';
-                    btn.classList.add('active');
+                // Setup audio
+                const audioSetup = await this.setupAudio();
+                
+                if (audioSetup && !this.usingFakeAudio) {
+                    // Create and start oscillators
+                    const oscCreated = this.createOscillators();
+                    
+                    if (oscCreated) {
+                        this.oscillators.forEach(oscData => {
+                            oscData.osc.start(this.audioContext.currentTime);
+                        });
+                        this.startFrequencyModulation();
+                        btn.textContent = '⏸️ Stop Music';
+                    } else {
+                        this.usingFakeAudio = true;
+                        btn.textContent = '🎨 Visual Mode';
+                    }
+                } else {
+                    this.usingFakeAudio = true;
+                    btn.textContent = '🎨 Visual Mode';
                 }
+                
+                this.isPlaying = true;
+                btn.classList.add('active');
+                document.getElementById('touchHint').style.display = 'none';
+                
             } else {
-                if (this.audioContext) {
-                    this.audioContext.suspend();
-                    this.isPlaying = false;
-                    btn.textContent = '🎵 Start Music';
-                    btn.classList.remove('active');
-                }
+                // Stop everything
+                this.stopAudio();
+                this.isPlaying = false;
+                btn.textContent = '🎵 Start';
+                btn.classList.remove('active');
+            }
+        }
+
+        stopAudio() {
+            if (this.oscillators) {
+                this.oscillators.forEach(oscData => {
+                    try {
+                        oscData.osc.stop();
+                        oscData.osc.disconnect();
+                    } catch (e) {
+                        // Already stopped
+                    }
+                });
+                this.oscillators = [];
+            }
+            
+            if (this.audioContext && this.audioContext.state !== 'closed') {
+                this.audioContext.suspend();
             }
         }
 
@@ -495,20 +640,30 @@
         }
 
         updateFrequencyBars() {
-            if (!this.analyser) {
-                // Create fake data for demo
-                this.dataArray = new Uint8Array(128);
+            if (!this.analyser || this.usingFakeAudio) {
+                // Create realistic fake data for demo
+                if (!this.dataArray) this.dataArray = new Uint8Array(128);
+                
                 for (let i = 0; i < this.dataArray.length; i++) {
-                    this.dataArray[i] = Math.sin(this.time * 0.01 + i * 0.1) * 50 + 
-                                      Math.sin(this.time * 0.02 + i * 0.05) * 30 + 128;
+                    this.dataArray[i] = Math.abs(
+                        Math.sin(this.time * 0.01 + i * 0.1) * 80 + 
+                        Math.sin(this.time * 0.02 + i * 0.05) * 40 + 
+                        Math.sin(this.time * 0.03 + i * 0.08) * 60 + 100
+                    );
                 }
             } else {
-                this.analyser.getByteFrequencyData(this.dataArray);
+                try {
+                    this.analyser.getByteFrequencyData(this.dataArray);
+                } catch (error) {
+                    this.createFakeAudioData();
+                }
             }
             
             const bars = document.querySelectorAll('.freq-bar');
+            const step = Math.floor(this.dataArray.length / bars.length);
+            
             bars.forEach((bar, i) => {
-                const value = this.dataArray[i * 4] || 0;
+                const value = this.dataArray[i * step] || 0;
                 const height = (value / 255) * 60;
                 bar.style.height = Math.max(2, height) + 'px';
             });
@@ -518,7 +673,7 @@
             this.beatIntensity = averageFreq / 255;
             
             const beatIndicator = document.getElementById('beatIndicator');
-            if (this.beatIntensity > 0.6) {
+            if (this.beatIntensity > 0.6 && Math.random() > 0.7) {
                 beatIndicator.classList.add('beat');
                 setTimeout(() => beatIndicator.classList.remove('beat'), 200);
             }
@@ -678,9 +833,19 @@
     // Initialize the visualizer
     const visualizer = new MobileVisualizer();
     
-    // Prevent default touch behaviors
-    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-    document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+    // Only prevent canvas scrolling, not button interactions
+    const canvas = document.getElementById('canvas');
+    canvas.addEventListener('touchmove', (e) => {
+        if (e.target === canvas) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    canvas.addEventListener('touchstart', (e) => {
+        if (e.target === canvas) {
+            e.preventDefault();
+        }
+    }, { passive: false });
 </script>
 ```
 
