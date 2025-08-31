@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>🎵 Space Music Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+```
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+        color: white;
+        overflow: hidden;
+        height: 100vh;
+        touch-action: manipulation;
+    }
+
+    #canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+        background: radial-gradient(circle at center, #1a1a2e 0%, #0c0c0c 100%);
+    }
+
+    .ui-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        pointer-events: none;
+        z-index: 10;
+    }
+
+    .controls {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+        pointer-events: all;
+    }
+
+    .control-row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    button {
+        background: rgba(100, 255, 218, 0.9);
+        color: #0c0c0c;
+        border: none;
+        padding: 12px 16px;
+        border-radius: 25px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 16px;
+        transition: all 0.3s ease;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 4px 15px rgba(100, 255, 218, 0.3);
+        min-width: 60px;
+    }
+
+    button:hover, button:active {
+        transform: scale(1.05);
+        box-shadow: 0 6px 20px rgba(100, 255, 218, 0.4);
+    }
+
+    button.active {
+        background: rgba(255, 107, 107, 0.9);
+        color: white;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+    }
+
+    .info-panel {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 15px 20px;
+        text-align: center;
+        pointer-events: all;
+        max-width: 90vw;
+    }
+
+    .title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #64ffda;
+        margin-bottom: 5px;
+    }
+
+    .subtitle {
+        font-size: 12px;
+        color: #b0bec5;
+        opacity: 0.8;
+    }
+
+    .visualizer-modes {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .mode-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-width: 45px;
+    }
+
+    .beat-indicator {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 80px;
+        height: 80px;
+        border: 3px solid rgba(100, 255, 218, 0.5);
+        border-radius: 50%;
+        transition: all 0.2s ease;
+        pointer-events: none;
+    }
+
+    .beat-indicator.beat {
+        transform: translate(-50%, -50%) scale(1.3);
+        border-color: rgba(255, 107, 107, 0.8);
+        box-shadow: 0 0 30px rgba(255, 107, 107, 0.6);
+    }
+
+    .frequency-bars {
+        position: absolute;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 2px;
+        height: 60px;
+        align-items: flex-end;
+        pointer-events: none;
+    }
+
+    .freq-bar {
+        width: 4px;
+        background: linear-gradient(to top, #64ffda, #ff6b6b);
+        border-radius: 2px;
+        transition: height 0.1s ease;
+        opacity: 0.8;
+    }
+
+    .touch-hint {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 14px;
+        pointer-events: none;
+        animation: fadeInOut 2s infinite;
+    }
+
+    @keyframes fadeInOut {
+        0%, 100% { opacity: 0.3; }
+        50% { opacity: 0.7; }
+    }
+
+    .particle {
+        position: absolute;
+        width: 4px;
+        height: 4px;
+        background: #64ffda;
+        border-radius: 50%;
+        pointer-events: none;
+        animation: particleFloat 3s infinite ease-in-out;
+    }
+
+    @keyframes particleFloat {
+        0% { transform: translateY(0px) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(-200px) rotate(360deg); opacity: 0; }
+    }
+
+    .glow-effect {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 200px;
+        height: 200px;
+        background: radial-gradient(circle, rgba(100, 255, 218, 0.1) 0%, transparent 70%);
+        border-radius: 50%;
+        pointer-events: none;
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+        50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.1; }
+    }
+
+    @media (max-width: 480px) {
+        .controls {
+            bottom: 10px;
+        }
+        
+        .info-panel {
+            top: 10px;
+            padding: 10px 15px;
+        }
+        
+        .title {
+            font-size: 16px;
+        }
+        
+        button {
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+        
+        .mode-btn {
+            padding: 6px 8px;
+            font-size: 10px;
+        }
+    }
+</style>
+```
+
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+```
+<div class="ui-overlay">
+    <div class="info-panel">
+        <div class="title">🎵 Space Visualizer</div>
+        <div class="subtitle">Tap to start • Touch screen for effects</div>
+    </div>
+
+    <div class="beat-indicator" id="beatIndicator"></div>
+    
+    <div class="frequency-bars" id="frequencyBars">
+        <!-- Frequency bars will be generated here -->
+    </div>
+
+    <div class="glow-effect"></div>
+
+    <div class="controls">
+        <div class="visualizer-modes">
+            <button class="mode-btn active" data-mode="waves">🌊 Waves</button>
+            <button class="mode-btn" data-mode="spiral">🌀 Spiral</button>
+            <button class="mode-btn" data-mode="particles">✨ Stars</button>
+            <button class="mode-btn" data-mode="ripples">💫 Ripples</button>
+        </div>
+        
+        <div class="control-row">
+            <button id="startBtn">🎵 Start Music</button>
+            <button id="colorBtn">🎨 Colors</button>
+            <button id="speedBtn">⚡ Speed</button>
+        </div>
+    </div>
+
+    <div class="touch-hint" id="touchHint">
+        Touch the screen to create effects!
+    </div>
+</div>
+
+<script>
+    class MobileVisualizer {
+        constructor() {
+            this.canvas = document.getElementById('canvas');
+            this.ctx = this.canvas.getContext('2d');
+            this.audioContext = null;
+            this.analyser = null;
+            this.dataArray = null;
+            this.isPlaying = false;
+            
+            this.mode = 'waves';
+            this.colorScheme = 0;
+            this.speed = 1;
+            this.time = 0;
+            
+            this.touches = [];
+            this.particles = [];
+            this.beatIntensity = 0;
+            
+            this.colors = [
+                ['#64ffda', '#ff6b6b', '#4fc3f7'],
+                ['#ff9800', '#e91e63', '#9c27b0'],
+                ['#4caf50', '#ffeb3b', '#f44336'],
+                ['#00bcd4', '#8bc34a', '#ff5722']
+            ];
+            
+            this.setupCanvas();
+            this.setupEventListeners();
+            this.createFrequencyBars();
+            this.animate();
+            
+            // Hide touch hint after 5 seconds
+            setTimeout(() => {
+                document.getElementById('touchHint').style.display = 'none';
+            }, 5000);
+        }
+
+        setupCanvas() {
+            this.resizeCanvas();
+            window.addEventListener('resize', () => this.resizeCanvas());
+        }
+
+        resizeCanvas() {
+            this.canvas.width = window.innerWidth * window.devicePixelRatio;
+            this.canvas.height = window.innerHeight * window.devicePixelRatio;
+            this.canvas.style.width = window.innerWidth + 'px';
+            this.canvas.style.height = window.innerHeight + 'px';
+            this.ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+
+        async setupAudio() {
+            try {
+                this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create oscillator for demo music
+                this.oscillator = this.audioContext.createOscillator();
+                this.gainNode = this.audioContext.createGain();
+                this.analyser = this.audioContext.createAnalyser();
+                
+                this.analyser.fftSize = 256;
+                this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+                
+                // Create a more complex sound
+                this.oscillator.type = 'sine';
+                this.oscillator.frequency.setValueAtTime(220, this.audioContext.currentTime);
+                
+                this.oscillator.connect(this.gainNode);
+                this.gainNode.connect(this.analyser);
+                this.analyser.connect(this.audioContext.destination);
+                
+                this.gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+                
+                // Create varying frequencies for more interesting visualization
+                this.startFrequencyModulation();
+                
+                return true;
+            } catch (error) {
+                console.error('Audio setup failed:', error);
+                return false;
+            }
+        }
+
+        startFrequencyModulation() {
+            if (!this.oscillator) return;
+            
+            const baseFreq = 220;
+            const modulate = () => {
+                if (!this.isPlaying) return;
+                
+                const freq = baseFreq + Math.sin(this.time * 0.01) * 100 + Math.cos(this.time * 0.007) * 50;
+                this.oscillator.frequency.setValueAtTime(freq, this.audioContext.currentTime);
+                
+                setTimeout(modulate, 50);
+            };
+            modulate();
+        }
+
+        createFrequencyBars() {
+            const container = document.getElementById('frequencyBars');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < 32; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'freq-bar';
+                bar.style.height = '2px';
+                container.appendChild(bar);
+            }
+        }
+
+        setupEventListeners() {
+            // Touch events
+            this.canvas.addEventListener('touchstart', (e) => this.handleTouch(e), { passive: false });
+            this.canvas.addEventListener('touchmove', (e) => this.handleTouch(e), { passive: false });
+            this.canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+            
+            // Mouse events for desktop testing
+            this.canvas.addEventListener('mousedown', (e) => this.handleMouse(e));
+            this.canvas.addEventListener('mousemove', (e) => this.handleMouse(e));
+            
+            // Control buttons
+            document.getElementById('startBtn').addEventListener('click', () => this.toggleMusic());
+            document.getElementById('colorBtn').addEventListener('click', () => this.changeColors());
+            document.getElementById('speedBtn').addEventListener('click', () => this.changeSpeed());
+            
+            // Mode buttons
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => this.changeMode(e.target.dataset.mode, e.target));
+            });
+        }
+
+        handleTouch(e) {
+            e.preventDefault();
+            this.touches = [];
+            
+            for (let i = 0; i < e.touches.length; i++) {
+                const touch = e.touches[i];
+                this.touches.push({
+                    x: touch.clientX,
+                    y: touch.clientY,
+                    id: touch.identifier
+                });
+                
+                this.createTouchParticles(touch.clientX, touch.clientY);
+            }
+        }
+
+        handleTouchEnd(e) {
+            e.preventDefault();
+            this.touches = [];
+        }
+
+        handleMouse(e) {
+            if (e.buttons === 1) { // Left mouse button
+                this.touches = [{ x: e.clientX, y: e.clientY, id: 0 }];
+                this.createTouchParticles(e.clientX, e.clientY);
+            }
+        }
+
+        createTouchParticles(x, y) {
+            for (let i = 0; i < 3; i++) {
+                this.particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    life: 1,
+                    decay: 0.02,
+                    color: this.colors[this.colorScheme][Math.floor(Math.random() * 3)]
+                });
+            }
+        }
+
+        async toggleMusic() {
+            const btn = document.getElementById('startBtn');
+            
+            if (!this.isPlaying) {
+                const success = await this.setupAudio();
+                if (success) {
+                    this.oscillator.start();
+                    this.isPlaying = true;
+                    btn.textContent = '⏸️ Pause';
+                    btn.classList.add('active');
+                }
+            } else {
+                if (this.audioContext) {
+                    this.audioContext.suspend();
+                    this.isPlaying = false;
+                    btn.textContent = '🎵 Start Music';
+                    btn.classList.remove('active');
+                }
+            }
+        }
+
+        changeColors() {
+            this.colorScheme = (this.colorScheme + 1) % this.colors.length;
+            const btn = document.getElementById('colorBtn');
+            btn.style.background = this.colors[this.colorScheme][0];
+            setTimeout(() => {
+                btn.style.background = 'rgba(100, 255, 218, 0.9)';
+            }, 200);
+        }
+
+        changeSpeed() {
+            this.speed = this.speed >= 3 ? 0.5 : this.speed + 0.5;
+            const btn = document.getElementById('speedBtn');
+            btn.textContent = `⚡ ${this.speed}x`;
+            btn.classList.toggle('active', this.speed > 1);
+        }
+
+        changeMode(mode, btn) {
+            this.mode = mode;
+            document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        updateFrequencyBars() {
+            if (!this.analyser) {
+                // Create fake data for demo
+                this.dataArray = new Uint8Array(128);
+                for (let i = 0; i < this.dataArray.length; i++) {
+                    this.dataArray[i] = Math.sin(this.time * 0.01 + i * 0.1) * 50 + 
+                                      Math.sin(this.time * 0.02 + i * 0.05) * 30 + 128;
+                }
+            } else {
+                this.analyser.getByteFrequencyData(this.dataArray);
+            }
+            
+            const bars = document.querySelectorAll('.freq-bar');
+            bars.forEach((bar, i) => {
+                const value = this.dataArray[i * 4] || 0;
+                const height = (value / 255) * 60;
+                bar.style.height = Math.max(2, height) + 'px';
+            });
+            
+            // Update beat indicator
+            const averageFreq = this.dataArray.reduce((a, b) => a + b, 0) / this.dataArray.length;
+            this.beatIntensity = averageFreq / 255;
+            
+            const beatIndicator = document.getElementById('beatIndicator');
+            if (this.beatIntensity > 0.6) {
+                beatIndicator.classList.add('beat');
+                setTimeout(() => beatIndicator.classList.remove('beat'), 200);
+            }
+        }
+
+        updateParticles() {
+            this.particles = this.particles.filter(particle => {
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life -= particle.decay;
+                return particle.life > 0;
+            });
+        }
+
+        drawWaves() {
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const currentColors = this.colors[this.colorScheme];
+            
+            for (let wave = 0; wave < 3; wave++) {
+                this.ctx.beginPath();
+                this.ctx.strokeStyle = currentColors[wave];
+                this.ctx.lineWidth = 2 + wave;
+                this.ctx.globalAlpha = 0.7;
+                
+                for (let x = 0; x < window.innerWidth; x += 5) {
+                    const y = centerY + 
+                            Math.sin((x + this.time * this.speed) * 0.01 + wave * 2) * 50 * (1 + this.beatIntensity) +
+                            Math.sin((x + this.time * this.speed) * 0.007 + wave) * 30;
+                    
+                    if (x === 0) {
+                        this.ctx.moveTo(x, y);
+                    } else {
+                        this.ctx.lineTo(x, y);
+                    }
+                }
+                this.ctx.stroke();
+            }
+        }
+
+        drawSpiral() {
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            const currentColors = this.colors[this.colorScheme];
+            
+            this.ctx.globalAlpha = 0.8;
+            
+            for (let i = 0; i < 300; i++) {
+                const angle = i * 0.1 + this.time * this.speed * 0.02;
+                const radius = i * 0.8 * (1 + this.beatIntensity * 0.5);
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+                
+                this.ctx.fillStyle = currentColors[i % 3];
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, 2 + this.beatIntensity * 3, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+
+        drawParticleField() {
+            const currentColors = this.colors[this.colorScheme];
+            
+            // Add new particles
+            if (Math.random() < 0.1) {
+                this.particles.push({
+                    x: Math.random() * window.innerWidth,
+                    y: window.innerHeight + 10,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: -Math.random() * 3 - 1,
+                    life: 1,
+                    decay: 0.005,
+                    color: currentColors[Math.floor(Math.random() * 3)]
+                });
+            }
+            
+            // Draw particles
+            this.particles.forEach(particle => {
+                this.ctx.globalAlpha = particle.life;
+                this.ctx.fillStyle = particle.color;
+                this.ctx.beginPath();
+                this.ctx.arc(particle.x, particle.y, 2 + this.beatIntensity * 2, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+        }
+
+        drawRipples() {
+            const currentColors = this.colors[this.colorScheme];
+            
+            // Draw touch ripples
+            this.touches.forEach(touch => {
+                for (let r = 0; r < 3; r++) {
+                    this.ctx.beginPath();
+                    this.ctx.strokeStyle = currentColors[r];
+                    this.ctx.lineWidth = 2;
+                    this.ctx.globalAlpha = 0.6;
+                    const radius = 50 + r * 30 + Math.sin(this.time * 0.05) * 20;
+                    this.ctx.arc(touch.x, touch.y, radius, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                }
+            });
+            
+            // Auto ripples
+            const centerX = window.innerWidth / 2;
+            const centerY = window.innerHeight / 2;
+            
+            for (let r = 0; r < 5; r++) {
+                this.ctx.beginPath();
+                this.ctx.strokeStyle = currentColors[r % 3];
+                this.ctx.lineWidth = 1;
+                this.ctx.globalAlpha = 0.4;
+                const radius = ((this.time * this.speed + r * 50) % 300) * (1 + this.beatIntensity);
+                this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                this.ctx.stroke();
+            }
+        }
+
+        drawTouchParticles() {
+            this.particles.forEach(particle => {
+                this.ctx.globalAlpha = particle.life;
+                this.ctx.fillStyle = particle.color;
+                this.ctx.beginPath();
+                this.ctx.arc(particle.x, particle.y, 3, 0, Math.PI * 2);
+                this.ctx.fill();
+            });
+        }
+
+        animate() {
+            this.ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+            
+            this.time += 1;
+            this.updateFrequencyBars();
+            this.updateParticles();
+            
+            // Draw based on current mode
+            switch (this.mode) {
+                case 'waves':
+                    this.drawWaves();
+                    break;
+                case 'spiral':
+                    this.drawSpiral();
+                    break;
+                case 'particles':
+                    this.drawParticleField();
+                    break;
+                case 'ripples':
+                    this.drawRipples();
+                    break;
+            }
+            
+            this.drawTouchParticles();
+            
+            requestAnimationFrame(() => this.animate());
+        }
+    }
+
+    // Initialize the visualizer
+    const visualizer = new MobileVisualizer();
+    
+    // Prevent default touch behaviors
+    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+</script>
+```
+
+</body>
+</html>
